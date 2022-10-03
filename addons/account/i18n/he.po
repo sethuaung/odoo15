@@ -22,13 +22,13 @@
 # Martin Trigaux, 2022
 # MichaelHadar, 2022
 # Jonathan Spier, 2022
-# Sagi Ahiel, 2022
 # david danilov, 2022
 # Lilach Gilliam <lilach.gilliam@gmail.com>, 2022
 # Netta Waizer, 2022
+# NoaFarkash, 2022
 # Roy Sayag, 2022
 # hed shefer <hed@laylinetech.com>, 2022
-# NoaFarkash, 2022
+# Sagi Ahiel, 2022
 # 
 msgid ""
 msgstr ""
@@ -36,7 +36,7 @@ msgstr ""
 "Report-Msgid-Bugs-To: \n"
 "POT-Creation-Date: 2022-02-18 09:52+0000\n"
 "PO-Revision-Date: 2021-09-14 12:18+0000\n"
-"Last-Translator: NoaFarkash, 2022\n"
+"Last-Translator: Sagi Ahiel, 2022\n"
 "Language-Team: Hebrew (https://www.transifex.com/odoo/teams/41243/he/)\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
@@ -776,6 +776,11 @@ msgid "<span class=\"o_stat_text\">Invoiced</span>"
 msgstr "<span class=\"o_stat_text\">חויב</span>"
 
 #. module: account
+#: model_terms:ir.ui.view,arch_db:account.view_account_payment_form
+msgid "<span class=\"o_stat_text\">Journal Entry</span>"
+msgstr ""
+
+#. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_move_form
 msgid ""
 "<span class=\"oe_inline o_form_label mr-3 ml-5 oe_edit_only\" "
@@ -920,6 +925,12 @@ msgstr "<span>5.00</span>"
 #: model_terms:ir.ui.view,arch_db:account.report_payment_receipt_document
 msgid "<span>Amount</span>"
 msgstr "<span>סכום כולל</span>"
+
+#. module: account
+#: model_terms:ir.ui.view,arch_db:account.bill_preview
+#: model_terms:ir.ui.view,arch_db:account.report_payment_receipt_document
+msgid "<span>Amount In Currency</span>"
+msgstr ""
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.bill_preview
@@ -3462,7 +3473,7 @@ msgstr "חשבון הוצאות הפרשי מזומן"
 #: code:addons/account/models/chart_template.py:0
 #, python-format
 msgid "Cash Difference Gain"
-msgstr "שוני ברווח מזומן"
+msgstr "רווח מהפרשי מזומן"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_chart_template__default_cash_difference_income_account_id
@@ -3474,7 +3485,7 @@ msgstr "חשבון הכנסה בהפרשי מזומן"
 #: code:addons/account/models/chart_template.py:0
 #, python-format
 msgid "Cash Difference Loss"
-msgstr "שוני בהפסדי מזומן"
+msgstr "הפסד מהפרשי מזומן"
 
 #. module: account
 #: model:ir.actions.act_window,name:account.action_view_bank_statement_tree
@@ -5400,7 +5411,7 @@ msgstr "מיפוי עבור חשבוניות זיכוי"
 #: model:ir.model.fields,field_description:account.field_account_tax__invoice_repartition_line_ids
 #: model_terms:ir.ui.view,arch_db:account.view_tax_form
 msgid "Distribution for Invoices"
-msgstr "הפצה עבור חשבוניות"
+msgstr "מיפוי עבור חשבוניות"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_tax__refund_repartition_line_ids
@@ -7475,7 +7486,7 @@ msgstr "מודפס"
 #: model:ir.model.fields,field_description:account.field_account_bank_statement_line__is_reconciled
 #: model:ir.model.fields,field_description:account.field_account_payment__is_reconciled
 msgid "Is Reconciled"
-msgstr "האם מתפייס"
+msgstr "האם הותאם"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_move_line__is_rounding_line
@@ -7603,7 +7614,6 @@ msgstr "פקודות יומן לפי תאריך"
 #: model_terms:ir.ui.view,arch_db:account.account_journal_dashboard_kanban_view
 #: model_terms:ir.ui.view,arch_db:account.view_account_move_filter
 #: model_terms:ir.ui.view,arch_db:account.view_account_move_line_filter
-#: model_terms:ir.ui.view,arch_db:account.view_account_payment_form
 #, python-format
 msgid "Journal Entry"
 msgstr "פקודת יומן"
@@ -9285,12 +9295,12 @@ msgstr "פתח"
 #: code:addons/account/models/account_bank_statement.py:0
 #, python-format
 msgid "Open Balance"
-msgstr "מאזן פתוח"
+msgstr "יתרה"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_account__opening_balance
 msgid "Opening Balance"
-msgstr "מאזן פתיחה"
+msgstr "יתרת פתיחה"
 
 #. module: account
 #: model:ir.model,name:account.model_account_financial_year_op
@@ -10991,18 +11001,18 @@ msgstr "יתרה להכרה"
 #: model:ir.model.fields,field_description:account.field_account_bank_statement_line__amount_residual
 #: model:ir.model.fields,field_description:account.field_account_move_line__amount_residual
 msgid "Residual Amount"
-msgstr "ערך שייר"
+msgstr "סכום שארית"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_move_line__amount_residual_currency
 msgid "Residual Amount in Currency"
-msgstr "ערך שייר במטבע"
+msgstr "סכום שארית במטבע"
 
 #. module: account
 #: code:addons/account/models/account_journal_dashboard.py:0
 #, python-format
 msgid "Residual amount"
-msgstr "ערך שייר"
+msgstr "סכום שארית"
 
 #. module: account
 #: model:ir.model.fields,field_description:account.field_account_bank_statement__user_id
@@ -11115,7 +11125,7 @@ msgstr "צור זיכוי"
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_move_form
 msgid "Reverse Entry"
-msgstr "צור זיכוי"
+msgstr "צור פקודת סטורנו"
 
 #. module: account
 #: model_terms:ir.ui.view,arch_db:account.view_account_move_reversal
@@ -12438,7 +12448,7 @@ msgstr "זכאות מס"
 #: model_terms:ir.ui.view,arch_db:account.view_move_form
 #: model_terms:ir.ui.view,arch_db:account.view_move_line_tree_grouped
 msgid "Tax Grids"
-msgstr "קטגוריות מס"
+msgstr "סעיף בדו\"ח מס"
 
 #. module: account
 #: model:ir.model,name:account.model_account_tax_group
@@ -13605,6 +13615,9 @@ msgid ""
 "The journal entry %s reached an invalid state regarding its related statement line.\n"
 "To be consistent, the journal entry must always have exactly one journal item involving the bank/cash account."
 msgstr ""
+"פקודת היומן %s הגיעה למצב למצב לא תקין כתוצאה מהפעולה.\n"
+"בכדי לאפשר את הפעולה, פקודת היומן חייבת תמיד להכיל חשבון בנק/מזומן אחד.\n"
+"אנא בדוק את פקודת היומן"
 
 #. module: account
 #: model:ir.model.fields,help:account.field_res_company__account_opening_move_id
@@ -14584,13 +14597,13 @@ msgstr "תאריך העברה"
 #: code:addons/account/wizard/account_automatic_entry_wizard.py:0
 #, python-format
 msgid "Transfer counterpart"
-msgstr ""
+msgstr "העברה מקבילה"
 
 #. module: account
 #: code:addons/account/wizard/account_automatic_entry_wizard.py:0
 #, python-format
 msgid "Transfer entry to %s"
-msgstr "פקודה מעבירה ל- %s"
+msgstr "סטורנו מעבירה ל- %s"
 
 #. module: account
 #: code:addons/account/models/account_payment.py:0
