@@ -85,7 +85,7 @@ class FleetVehicle(models.Model):
     horsepower_tax = fields.Float('Horsepower Taxation', compute='_compute_model_fields', store=True, readonly=False)
     power = fields.Integer('Power', help='Power in kW of the vehicle', compute='_compute_model_fields', store=True, readonly=False)
     co2 = fields.Float('CO2 Emissions', help='CO2 emissions of the vehicle', compute='_compute_model_fields', store=True, readonly=False)
-    co2_standard = fields.Char(compute='_compute_model_fields', store=True, readonly=False)
+    co2_standard = fields.Char('CO2 Standard', compute='_compute_model_fields', store=True, readonly=False)
     image_128 = fields.Image(related='model_id.image_128', readonly=True)
     contract_renewal_due_soon = fields.Boolean(compute='_compute_contract_reminder', search='_search_contract_renewal_due_soon',
         string='Has Contracts to renew')
@@ -299,9 +299,9 @@ class FleetVehicle(models.Model):
             )
 
     def action_accept_driver_change(self):
-        # Find all the vehicles for which the driver is the future_driver_id
+        # Find all the vehicles of the same type for which the driver is the future_driver_id
         # remove their driver_id and close their history using current date
-        vehicles = self.search([('driver_id', 'in', self.mapped('future_driver_id').ids)])
+        vehicles = self.search([('driver_id', 'in', self.mapped('future_driver_id').ids), ('vehicle_type', '=', self.vehicle_type)])
         vehicles.write({'driver_id': False})
 
         for vehicle in self:

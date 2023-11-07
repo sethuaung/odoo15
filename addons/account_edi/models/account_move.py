@@ -5,6 +5,7 @@ from collections import defaultdict
 
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError
+from odoo.tools import frozendict
 
 
 class AccountMove(models.Model):
@@ -241,9 +242,6 @@ class AccountMove(models.Model):
         '''
         self.ensure_one()
 
-        def _serialize_python_dictionary(vals):
-            return '-'.join(str(vals[k]) for k in sorted(vals.keys()))
-
         def default_grouping_key_generator(tax_values):
             return {'tax': tax_values['tax_id']}
 
@@ -287,12 +285,15 @@ class AccountMove(models.Model):
                 invoice_lines_tax_values_dict[invoice_line] = []
                 rate = abs(invoice_line.balance) / abs(invoice_line.amount_currency) if invoice_line.amount_currency else 0.0
                 for tax_res in taxes_res['taxes']:
+                    tax_amount = tax_res['amount'] * rate
+                    if self.company_id.tax_calculation_rounding_method == 'round_per_line':
+                        tax_amount = invoice_line.company_currency_id.round(tax_amount)
                     invoice_lines_tax_values_dict[invoice_line].append({
                         'base_line_id': invoice_line,
                         'tax_id': self.env['account.tax'].browse(tax_res['id']),
                         'tax_repartition_line_id': self.env['account.tax.repartition.line'].browse(tax_res['tax_repartition_line_id']),
                         'base_amount': sign * invoice_line.company_currency_id.round(tax_res['base'] * rate),
-                        'tax_amount': sign * invoice_line.company_currency_id.round(tax_res['amount'] * rate),
+                        'tax_amount': sign * tax_amount,
                         'base_amount_currency': sign * tax_res['base'],
                         'tax_amount_currency': sign * tax_res['amount'],
                     })
@@ -399,7 +400,7 @@ class AccountMove(models.Model):
 
             for tax_values in tax_values_list:
                 grouping_key = grouping_key_generator(tax_values)
-                serialized_grouping_key = _serialize_python_dictionary(grouping_key)
+                serialized_grouping_key = frozendict(grouping_key)
                 key_by_tax[tax_values['tax_id']] = serialized_grouping_key
 
                 # Add to invoice line global tax amounts.
@@ -552,6 +553,7 @@ class AccountMove(models.Model):
         res = super().button_draft()
 
         self.edi_document_ids.write({'error': False, 'blocking_level': False})
+        self.edi_document_ids.filtered(lambda doc: doc.state == 'to_send').unlink()
 
         return res
 
@@ -560,6 +562,7 @@ class AccountMove(models.Model):
         '''
         to_cancel_documents = self.env['account.edi.document']
         for move in self:
+            move._check_fiscalyear_lock_date()
             is_move_marked = False
             for doc in move.edi_document_ids:
                 if doc.edi_format_id._needs_web_services() \

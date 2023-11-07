@@ -9,6 +9,7 @@ from . import test_account_move_in_refund
 from . import test_account_move_entry
 from . import test_account_move_date_algorithm
 from . import test_invoice_tax_totals
+from . import test_account_inalterable_hash
 from . import test_account_journal
 from . import test_account_account
 from . import test_account_tax
@@ -20,6 +21,7 @@ from . import test_account_move_rounding
 from . import test_account_invoice_report
 from . import test_account_move_line_tax_details
 from . import test_account_journal_dashboard
+from . import test_chart_template
 from . import test_fiscal_position
 from . import test_reconciliation
 from . import test_sequence_mixin
@@ -37,3 +39,4 @@ from . import test_account_incoming_supplier_invoice
 from . import test_payment_term
 from . import test_account_payment_register
 from . import test_tour
+from . import test_ir_actions_report

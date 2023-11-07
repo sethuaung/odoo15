@@ -89,7 +89,7 @@ class Registry(Mapping):
                     odoo.modules.reset_modules_state(db_name)
                     raise
             except Exception:
-                _logger.error('Failed to load registry')
+                _logger.exception('Failed to load registry')
                 del cls.registries[db_name]     # pylint: disable=unsupported-delete-operation
                 raise
 
@@ -244,6 +244,7 @@ class Registry(Mapping):
             This must be called after loading modules and before using the ORM.
         """
         env = odoo.api.Environment(cr, SUPERUSER_ID, {})
+        env['base'].flush()
 
         # Uninstall registry hooks. Because of the condition, this only happens
         # on a fully loaded registry, and not on a registry being loaded.

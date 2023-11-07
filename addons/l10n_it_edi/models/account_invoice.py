@@ -148,10 +148,15 @@ class AccountMove(models.Model):
                     tax_dict['base_amount'] = base_amount - tax_dict['rounding_euros']
 
             if not reverse_charge_refund:
-                tax_dict['base_amount'] = abs(tax_dict['base_amount'])
-                tax_dict['base_amount_currency'] = abs(tax_dict['base_amount_currency'])
-                tax_dict['tax_amount'] = abs(tax_dict['tax_amount'])
-                tax_dict['tax_amount_currency'] = abs(tax_dict['tax_amount_currency'])
+                balance_multiplicator = -1 if self.is_inbound() else 1
+                if tax_dict['base_amount'] != 0:  # We shouldn't change 0 into -0
+                    tax_dict['base_amount'] *= balance_multiplicator
+                if tax_dict['base_amount_currency'] != 0:
+                    tax_dict['base_amount_currency'] *= balance_multiplicator
+                if tax_dict['tax_amount'] != 0:
+                    tax_dict['tax_amount'] *= balance_multiplicator
+                if tax_dict['tax_amount_currency'] != 0:
+                    tax_dict['tax_amount_currency'] *= balance_multiplicator
         return tax_details
 
     def _prepare_fatturapa_export_values(self):
@@ -281,7 +286,7 @@ class AccountMove(models.Model):
             'document_total': document_total,
             'representative': company.l10n_it_tax_representative_partner_id,
             'codice_destinatario': codice_destinatario,
-            'regime_fiscale': company.l10n_it_tax_system if not is_self_invoice else 'RF01',
+            'regime_fiscale': company.l10n_it_tax_system if not is_self_invoice else 'RF18',
             'is_self_invoice': is_self_invoice,
             'partner_bank': self.partner_bank_id,
             'format_date': format_date,

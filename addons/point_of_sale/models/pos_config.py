@@ -26,7 +26,11 @@ class PosConfig(models.Model):
         return self.env['account.journal'].search([('type', '=', 'sale'), ('company_id', '=', self.env.company.id)], limit=1)
 
     def _default_payment_methods(self):
-        return self.env['pos.payment.method'].search([('split_transactions', '=', False), ('company_id', '=', self.env.company.id)])
+        domain = [('split_transactions', '=', False), ('company_id', '=', self.env.company.id)]
+        non_cash_pm = self.env['pos.payment.method'].search(domain + [('is_cash_count', '=', False)])
+        available_cash_pm = self.env['pos.payment.method'].search(domain + [('is_cash_count', '=', True),
+                                                                            ('config_ids', '=', False)], limit=1)
+        return non_cash_pm | available_cash_pm
 
     def _default_pricelist(self):
         return self.env['product.pricelist'].search([('company_id', 'in', (False, self.env.company.id)), ('currency_id', '=', self.env.company.currency_id.id)], limit=1)
@@ -195,10 +199,7 @@ class PosConfig(models.Model):
     @api.depends('company_id')
     def _compute_company_has_template(self):
         for config in self:
-            if config.company_id.chart_template_id:
-                config.company_has_template = True
-            else:
-                config.company_has_template = False
+            config.company_has_template = self.env['account.chart.template'].existing_accounting(config.company_id) or config.company_id.chart_template_id
 
     def _compute_is_installed_account_accountant(self):
         account_accountant = self.env['ir.module.module'].sudo().search([('name', '=', 'account_accountant'), ('state', '=', 'installed')])
@@ -338,6 +339,20 @@ class PosConfig(models.Model):
             raise ValidationError(
                 _("You must have at least one payment method configured to launch a session.")
             )
+
+    @api.constrains('limited_partners_amount', 'limited_partners_loading')
+    def _check_limited_partners(self):
+        for rec in self:
+            if rec.limited_partners_loading and not rec.limited_partners_amount:
+                raise ValidationError(
+                    _("Number of partners loaded can not be 0"))
+
+    @api.constrains('limited_products_amount', 'limited_products_loading')
+    def _check_limited_products(self):
+        for rec in self:
+            if rec.limited_products_loading and not rec.limited_products_amount:
+                raise ValidationError(
+                    _("Number of product loaded can not be 0"))
 
     @api.constrains('pricelist_id', 'available_pricelist_ids')
     def _check_pricelists(self):
@@ -664,7 +679,7 @@ class PosConfig(models.Model):
             if not pos_journal:
                 pos_journal = self.env['account.journal'].create({
                     'type': 'general',
-                    'name': 'Point of Sale',
+                    'name': _('Point of Sale'),
                     'code': 'POSS',
                     'company_id': company.id,
                     'sequence': 20

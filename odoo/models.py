@@ -1162,6 +1162,10 @@ class BaseModel(metaclass=MetaModel):
                     # Failed to write, log to messages, rollback savepoint (to
                     # avoid broken transaction) and keep going
                     errors += 1
+                except UserError as e:
+                    info = rec_data['info']
+                    messages.append(dict(info, type='error', message=str(e)))
+                    errors += 1
                 except Exception as e:
                     _logger.debug("Error while loading record", exc_info=True)
                     info = rec_data['info']
@@ -2881,6 +2885,8 @@ class BaseModel(metaclass=MetaModel):
         for (key, definition, message) in self._sql_constraints:
             conname = '%s_%s' % (self._table, key)
             current_definition = tools.constraint_definition(cr, self._table, conname)
+            if len(conname) > 63 and not current_definition:
+                _logger.info("Constraint name %r has more than 63 characters", conname)
             if current_definition == definition:
                 continue
 
@@ -2922,7 +2928,8 @@ class BaseModel(metaclass=MetaModel):
                 # following specific properties:
                 #  - reading inherited fields should not bypass access rights
                 #  - copy inherited fields iff their original field is copied
-                self._add_field(name, field.new(
+                Field = type(field)
+                self._add_field(name, Field(
                     inherited=True,
                     inherited_field=field,
                     related=f"{parent_fname}.{name}",
@@ -2997,7 +3004,8 @@ class BaseModel(metaclass=MetaModel):
             if len(fields_) == 1 and fields_[0]._direct and fields_[0].model_name == cls._name:
                 cls._fields[name] = fields_[0]
             else:
-                self._add_field(name, fields_[-1].new(_base_fields=fields_))
+                Field = type(fields_[-1])
+                self._add_field(name, Field(_base_fields=fields_))
 
         # 2. add manual fields
         if self.pool._init_modules:
@@ -3343,7 +3351,16 @@ Fields:
                 cr.execute(query_str, params + [sub_ids])
                 result += cr.fetchall()
         else:
-            self.check_access_rule('read')
+            try:
+                self.check_access_rule('read')
+            except MissingError:
+                # Method _read() should never raise a MissingError, but method
+                # check_access_rule() can, because it must read fields on self.
+                # So we restrict 'self' to existing records (to avoid an extra
+                # exists() at the end of the method).
+                self = self.exists()
+                self.check_access_rule('read')
+
             result = [(id_,) for id_ in self.ids]
 
         fetched = self.browse()
@@ -4249,12 +4266,7 @@ Fields:
         return records
 
     def _compute_field_value(self, field):
-        # This is for base automation, to have something to override to catch
-        # the changes of values for stored compute fields.
-        if isinstance(field.compute, str):
-            getattr(self, field.compute)()
-        else:
-            field.compute(self)
+        fields.determine(field.compute, self)
 
         if field.store and any(self._ids):
             # check constraints of the fields that have been computed
@@ -4391,6 +4403,11 @@ Fields:
                     "\nUpdating record %s of target model %s"),
                     xml_id, self._name, d_model, d_id, d_id, self._name
                 )
+                raise ValidationError(
+                    f"For external id {xml_id} "
+                    f"when trying to create/update a record of model {self._name} "
+                    f"found record of different model {d_model} ({d_id})"
+                )
             record = self.browse(d_res_id)
             if r_id:
                 data['record'] = record
@@ -4412,6 +4429,17 @@ Fields:
             for data in to_create:
                 if data.get('xml_id') and not data['xml_id'].startswith(prefix):
                     _logger.warning("Creating record %s in module %s.", data['xml_id'], module)
+
+        if self.env.context.get('import_file'):
+            existing_modules = self.env['ir.module.module'].sudo().search([]).mapped('name')
+            for data in to_create:
+                xml_id = data.get('xml_id')
+                if xml_id:
+                    module_name, sep, record_id = xml_id.partition('.')
+                    if sep and module_name in existing_modules:
+                        raise UserError(
+                            _("The record %(xml_id)s has the module prefix %(module_name)s. This is the part before the '.' in the external id. Because the prefix refers to an existing module, the record would be deleted when the module is upgraded. Use either no prefix and no dot or a prefix that isn't an existing module. For example, __import__, resulting in the external id __import__.%(record_id)s.",
+                              xml_id=xml_id, module_name=module_name, record_id=record_id))
 
         # create records
         records = self._load_records_create([data['values'] for data in to_create])
@@ -4863,7 +4891,7 @@ Fields:
         self.ensure_one()
         vals = self.with_context(active_test=False).copy_data(default)[0]
         # To avoid to create a translation in the lang of the user, copy_translation will do it
-        new = self.with_context(lang=None).create(vals)
+        new = self.with_context(lang=None).create(vals).with_env(self.env)
         self.with_context(from_copy_translation=True).copy_translations(new, excluded=default or ())
         return new
 
@@ -5863,7 +5891,7 @@ Fields:
         return self.id or 0
 
     def __repr__(self):
-        return "%s%s" % (self._name, getattr(self, '_ids', ""))
+        return "%s%r" % (self._name, getattr(self, '_ids', ""))
 
     def __hash__(self):
         if hasattr(self, '_ids'):
@@ -6355,9 +6383,11 @@ Fields:
             missing_names = [name for name in nametree if name not in values]
             defaults = self.default_get(missing_names)
             for name in missing_names:
-                values[name] = defaults.get(name, False)
                 if name in defaults:
+                    values[name] = defaults[name]
                     names.append(name)
+                elif not self._fields[name].compute:
+                    values[name] = False
 
         # prefetch x2many lines: this speeds up the initial snapshot by avoiding
         # to compute fields on new records as much as possible, as that can be

@@ -11,11 +11,12 @@ import werkzeug.wrappers
 from PIL import Image, ImageFont, ImageDraw
 from lxml import etree
 from base64 import b64decode, b64encode
+from math import floor
 
 from odoo.http import request
 from odoo import http, tools, _, SUPERUSER_ID
 from odoo.addons.http_routing.models.ir_http import slug, unslug
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.modules.module import get_resource_path
 from odoo.tools.mimetypes import guess_mimetype
 from odoo.tools.image import image_data_uri, base64_to_image
@@ -25,6 +26,38 @@ from ..models.ir_attachment import SUPPORTED_IMAGE_EXTENSIONS, SUPPORTED_IMAGE_M
 
 logger = logging.getLogger(__name__)
 DEFAULT_LIBRARY_ENDPOINT = 'https://media-api.odoo.com'
+
+diverging_history_regex = 'data-last-history-steps="([0-9,]*?)"'
+
+def ensure_no_history_divergence(record, html_field_name, incoming_history_ids):
+    server_history_matches = re.search(diverging_history_regex, record[html_field_name] or '')
+    # Do not check old documents without data-last-history-steps.
+    if server_history_matches:
+        server_last_history_id = server_history_matches[1].split(',')[-1]
+        if server_last_history_id not in incoming_history_ids:
+            logger.warning('The document was already saved from someone with a different history for model %r, field %r with id %r.', record._name, html_field_name, record.id)
+            raise ValidationError(_('The document was already saved from someone with a different history for model %r, field %r with id %r.', record._name, html_field_name, record.id))
+
+def handle_history_divergence(record, html_field_name, vals):
+    # Do not handle history divergence if the field is not in the values.
+    if html_field_name not in vals:
+        return
+    incoming_html = vals[html_field_name]
+    incoming_history_matches = re.search(diverging_history_regex, incoming_html or '')
+    # When there is no incoming history id, it means that the value does not
+    # comes from the odoo editor or the collaboration was not activated. In
+    # project, it could come from the collaboration pad. In that case, we do not
+    # handle history divergences.
+    if incoming_history_matches is None:
+        return
+    incoming_history_ids = incoming_history_matches[1].split(',')
+    incoming_last_history_id = incoming_history_ids[-1]
+
+    if record[html_field_name]:
+        ensure_no_history_divergence(record, html_field_name, incoming_history_ids)
+
+    # Save only the latest id.
+    vals[html_field_name] = incoming_html[0:incoming_history_matches.start(1)] + incoming_last_history_id + incoming_html[incoming_history_matches.end(1):]
 
 class Web_Editor(http.Controller):
     #------------------------------------------------------
@@ -75,6 +108,13 @@ class Web_Editor(http.Controller):
             bg = bg.replace('rgba', 'rgb')
             bg = ','.join(bg.split(',')[:-1])+')'
 
+        # Convert the opacity value compatible with PIL Image color (0 to 255)
+        # when color specifier is 'rgba'
+        if color is not None and color.startswith('rgba'):
+            *rgb, a = color.strip(')').split(',')
+            opacity = str(floor(float(a) * 255))
+            color = ','.join([*rgb, opacity]) + ')'
+
         # Determine the dimensions of the icon
         image = Image.new("RGBA", (width, height), color)
         draw = ImageDraw.Draw(image)
@@ -120,7 +160,7 @@ class Web_Editor(http.Controller):
     @http.route('/web_editor/checklist', type='json', auth='user')
     def update_checklist(self, res_model, res_id, filename, checklistId, checked, **kwargs):
         record = request.env[res_model].browse(res_id)
-        value = getattr(record, filename, False)
+        value = filename in record._fields and record[filename]
         htmlelem = etree.fromstring("<div>%s</div>" % value, etree.HTMLParser())
         checked = bool(checked)
 
@@ -139,7 +179,7 @@ class Web_Editor(http.Controller):
         else:
             return value
 
-        value = etree.tostring(htmlelem[0][0], encoding='utf-8', method='html')[5:-6]
+        value = etree.tostring(htmlelem[0][0], encoding='utf-8', method='html')[5:-6].decode("utf-8")
         record.write({filename: value})
 
         return value
@@ -527,7 +567,7 @@ class Web_Editor(http.Controller):
         }
         bundle_css = None
         regex_hex = r'#[0-9A-F]{6,8}'
-        regex_rgba = r'rgba?\(\d{1,3},\d{1,3},\d{1,3}(?:,[0-9.]{1,4})?\)'
+        regex_rgba = r'rgba?\(\d{1,3}, ?\d{1,3}, ?\d{1,3}(?:, ?[0-9.]{1,4})?\)'
         for key, value in options.items():
             colorMatch = re.match('^c([1-5])$', key)
             if colorMatch:
@@ -587,11 +627,11 @@ class Web_Editor(http.Controller):
         svg, options = self._update_svg_colors(kwargs, svg)
         flip_value = options.get('flip', False)
         if flip_value == 'x':
-            svg = svg.replace('<svg ', '<svg style="transform: scaleX(-1);" ')
+            svg = svg.replace('<svg ', '<svg style="transform: scaleX(-1);" ', 1)
         elif flip_value == 'y':
-            svg = svg.replace('<svg ', '<svg style="transform: scaleY(-1)" ')
+            svg = svg.replace('<svg ', '<svg style="transform: scaleY(-1)" ', 1)
         elif flip_value == 'xy':
-            svg = svg.replace('<svg ', '<svg style="transform: scale(-1)" ')
+            svg = svg.replace('<svg ', '<svg style="transform: scale(-1)" ', 1)
 
         return request.make_response(svg, [
             ('Content-type', 'image/svg+xml'),
@@ -696,3 +736,11 @@ class Web_Editor(http.Controller):
         channel = (request.db, 'editor_collaboration', model_name, field_name, int(res_id))
         bus_data.update({'model_name': model_name, 'field_name': field_name, 'res_id': res_id})
         request.env['bus.bus']._sendone(channel, 'editor_collaboration', bus_data)
+
+    @http.route("/web_editor/ensure_common_history", type="json", auth="user")
+    def ensure_common_history(self, model_name, field_name, res_id, history_ids):
+        record = request.env[model_name].browse([res_id])
+        try:
+            ensure_no_history_divergence(record, field_name, history_ids)
+        except ValidationError:
+            return record[field_name]

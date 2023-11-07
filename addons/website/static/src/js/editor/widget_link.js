@@ -8,9 +8,6 @@ weWidgets.LinkTools.include({
     xmlDependencies: (weWidgets.LinkTools.prototype.xmlDependencies || []).concat(
         ['/website/static/src/xml/website.editor.xml']
     ),
-    events: _.extend({}, weWidgets.LinkTools.prototype.events || {}, {
-        'input input[name="url"]': '_onURLInput',
-    }),
     custom_events: _.extend({}, weWidgets.LinkTools.prototype.custom_events || {}, {
         website_url_chosen: '_onAutocompleteClose',
     }),
@@ -59,8 +56,19 @@ weWidgets.LinkTools.include({
         if ($selectMenu.data("anchor-for") !== urlInputValue) { // avoid useless query
             $pageAnchor.toggleClass('d-none', !isFromWebsite);
             $selectMenu.empty();
-            const always = () => $pageAnchor.find('we-toggler').text('\u00A0');
-            wUtils.loadAnchors(urlInputValue).then(anchors => {
+            const always = () => {
+                const anchor = `#${urlInputValue.split('#')[1]}`;
+                let weTogglerText = '\u00A0';
+                if (anchor) {
+                    const weButtonEls = $selectMenu[0].querySelectorAll('we-button');
+                    if (Array.from(weButtonEls).some(el => el.textContent === anchor)) {
+                        weTogglerText = anchor;
+                    }
+                }
+                $pageAnchor[0].querySelector('we-toggler').textContent = weTogglerText;
+            };
+            const urlWithoutHash = urlInputValue.split("#")[0];
+            wUtils.loadAnchors(urlWithoutHash).then(anchors => {
                 for (const anchor of anchors) {
                     const $option = $('<we-button class="dropdown-item">');
                     $option.text(anchor);

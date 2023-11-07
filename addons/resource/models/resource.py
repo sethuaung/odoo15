@@ -162,7 +162,7 @@ class ResourceCalendar(models.Model):
             company_id = res.get('company_id', self.env.company.id)
             company = self.env['res.company'].browse(company_id)
             company_attendance_ids = company.resource_calendar_id.attendance_ids
-            if company_attendance_ids:
+            if not company.resource_calendar_id.two_weeks_calendar and company_attendance_ids:
                 res['attendance_ids'] = [
                     (0, 0, {
                         'name': attendance.name,
@@ -216,7 +216,7 @@ class ResourceCalendar(models.Model):
 
     @api.depends('company_id')
     def _compute_attendance_ids(self):
-        for calendar in self.filtered(lambda c: not c._origin or c._origin.company_id != c.company_id):
+        for calendar in self.filtered(lambda c: not c._origin or c._origin.company_id != c.company_id and c.company_id):
             company_calendar = calendar.company_id.resource_calendar_id
             calendar.write({
                 'two_weeks_calendar': company_calendar.two_weeks_calendar,
@@ -1022,7 +1022,7 @@ class ResourceCalendarLeaves(models.Model):
     company_id = fields.Many2one(
         'res.company', string="Company", readonly=True, store=True,
         default=lambda self: self.env.company, compute='_compute_company_id')
-    calendar_id = fields.Many2one('resource.calendar', 'Working Hours', index=True)
+    calendar_id = fields.Many2one('resource.calendar', 'Working Hours', domain="[('company_id', 'in', [company_id, False])]", check_company=True, index=True)
     date_from = fields.Datetime('Start Date', required=True)
     date_to = fields.Datetime('End Date', required=True)
     resource_id = fields.Many2one(

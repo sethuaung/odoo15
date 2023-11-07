@@ -18,8 +18,7 @@ import threading
 from socket import gaierror, timeout
 from OpenSSL import crypto as SSLCrypto
 from OpenSSL.crypto import Error as SSLCryptoError, FILETYPE_PEM
-from OpenSSL.SSL import Error as SSLError
-from urllib3.contrib.pyopenssl import PyOpenSSLContext
+from OpenSSL.SSL import Context as SSLContext, Error as SSLError
 
 from odoo import api, fields, models, tools, _
 from odoo.exceptions import UserError
@@ -135,6 +134,14 @@ class IrMailServer(models.Model):
 
     def _get_test_email_addresses(self):
         self.ensure_one()
+        if self.from_filter:
+            if "@" in self.from_filter:
+                # All emails will be sent from the same address
+                return self.from_filter, "noreply@odoo.com"
+            # All emails will be sent from any address in the same domain
+            default_from = self.env["ir.config_parameter"].sudo().get_param("mail.default.from", "odoo")
+            return f"{default_from}@{self.from_filter}", "noreply@odoo.com"
+        # Fallback to current user email if there's no from filter
         email_from = self.env.user.email
         if not email_from:
             raise UserError(_('Please configure an email on the current user to simulate '
@@ -252,15 +259,15 @@ class IrMailServer(models.Model):
                and mail_server.smtp_ssl_certificate
                and mail_server.smtp_ssl_private_key):
                 try:
-                    ssl_context = PyOpenSSLContext(ssl.PROTOCOL_TLS)
+                    ssl_context = SSLContext(ssl.PROTOCOL_TLS)
                     smtp_ssl_certificate = base64.b64decode(mail_server.smtp_ssl_certificate)
                     certificate = SSLCrypto.load_certificate(FILETYPE_PEM, smtp_ssl_certificate)
                     smtp_ssl_private_key = base64.b64decode(mail_server.smtp_ssl_private_key)
                     private_key = SSLCrypto.load_privatekey(FILETYPE_PEM, smtp_ssl_private_key)
-                    ssl_context._ctx.use_certificate(certificate)
-                    ssl_context._ctx.use_privatekey(private_key)
+                    ssl_context.use_certificate(certificate)
+                    ssl_context.use_privatekey(private_key)
                     # Check that the private key match the certificate
-                    ssl_context._ctx.check_privatekey()
+                    ssl_context.check_privatekey()
                 except SSLCryptoError as e:
                     raise UserError(_('The private key or the certificate is not a valid file. \n%s', str(e)))
                 except SSLError as e:
@@ -282,10 +289,11 @@ class IrMailServer(models.Model):
 
             if smtp_ssl_certificate_filename and smtp_ssl_private_key_filename:
                 try:
-                    ssl_context = PyOpenSSLContext(ssl.PROTOCOL_TLS)
-                    ssl_context.load_cert_chain(smtp_ssl_certificate_filename, keyfile=smtp_ssl_private_key_filename)
+                    ssl_context = SSLContext(ssl.PROTOCOL_TLS)
+                    ssl_context.use_certificate_chain_file(smtp_ssl_certificate_filename)
+                    ssl_context.use_privatekey_file(smtp_ssl_private_key_filename)
                     # Check that the private key match the certificate
-                    ssl_context._ctx.check_privatekey()
+                    ssl_context.check_privatekey()
                 except SSLCryptoError as e:
                     raise UserError(_('The private key or the certificate is not a valid file. \n%s', str(e)))
                 except SSLError as e:
@@ -391,8 +399,6 @@ class IrMailServer(models.Model):
         body = body or u''
 
         msg = EmailMessage(policy=email.policy.SMTP)
-        msg.set_charset('utf-8')
-
         if not message_id:
             if object_id:
                 message_id = tools.generate_tracking_message_id(object_id)
@@ -416,9 +422,11 @@ class IrMailServer(models.Model):
 
         email_body = ustr(body)
         if subtype == 'html' and not body_alternative:
+            msg['MIME-Version'] = '1.0'
             msg.add_alternative(tools.html2plaintext(email_body), subtype='plain', charset='utf-8')
             msg.add_alternative(email_body, subtype=subtype, charset='utf-8')
         elif body_alternative:
+            msg['MIME-Version'] = '1.0'
             msg.add_alternative(ustr(body_alternative), subtype=subtype_alternative, charset='utf-8')
             msg.add_alternative(email_body, subtype=subtype, charset='utf-8')
         else:
